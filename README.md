@@ -180,4 +180,17 @@ jlc-3d-proxy/
 - The service runs in a desktop environment (GUI required for the initial login)
 - Login credentials (token) are valid for ~24h; re-login when expired
 - `creds.json` and `browser-state/` contain sensitive data and are gitignored
-- This project is for educational/research purposes only — please comply with JLC's terms of service
+
+## Disclaimer
+
+> **This project is for learning and research purposes only.**
+>
+> All reverse engineering and technical analysis in this repository is intended solely to understand how the JLC 3D Viewer API works, as an exercise in web security research and API interoperability.
+>
+> - **Do not** use this project to circumvent access controls, abuse the service, bypass rate limits at scale, or disrupt JLC's business operations.
+> - **Do not** use it for any commercial exploitation, unauthorized data scraping, or malicious purposes.
+> - Users are **solely responsible** for their own actions. The author assumes no liability for any misuse.
+> - Please **respect JLC's Terms of Service** and only operate within the scope permitted by your own legitimate account.
+>
+> If you are a JLC representative and believe this project should be taken down, please open an issue or contact the repository owner.
+
