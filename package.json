@@ -1,0 +1,19 @@
+{
+  "name": "jlc-3d-proxy",
+  "version": "1.0.0",
+  "description": "嘉立创3D查看器接口逆向 + 本地HTTP代理服务 — 登录后无限次数上传预览",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "postinstall": "npx playwright install chromium"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "express": "^5.2.1",
+    "multer": "^2.2.0",
+    "playwright": "^1.61.1"
+  }
+}

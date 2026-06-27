@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JLC 3D 预览 - 本地代理</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: #f5f6f8; margin: 0; padding: 24px; color: #1f2329; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #8a909a; font-size: 13px; margin-bottom: 20px; }
+  .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; padding: 6px 14px; border-radius: 999px; font-weight: 500; }
+  .status .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .ok { background: #e7f7ee; color: #15a35f; } .ok .dot { background: #15a35f; }
+  .no { background: #fdecec; color: #e5403a; } .no .dot { background: #e5403a; }
+  .wait { background: #fff4e0; color: #d98a00; } .wait .dot { background: #d98a00; }
+  button { border: 0; padding: 10px 18px; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 500; transition: .15s; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-login { background: #165dff; color: #fff; }
+  .btn-login:hover:not(:disabled) { background: #0e4fd9; }
+  .btn-upload { background: #15a35f; color: #fff; position: relative; overflow: hidden; }
+  .btn-upload:hover:not(:disabled) { background: #128a50; }
+  .btn-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .btn-sm { background: #f2f3f5; color: #1f2329; padding: 8px 14px; font-size: 13px; }
+  .label { font-size: 13px; color: #8a909a; margin-bottom: 8px; }
+  .user { font-size: 13px; color: #4e5969; margin-top: 10px; }
+  .result { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; background: #0d1117; color: #c9d1d9; padding: 14px; border-radius: 8px; white-space: pre-wrap; word-break: break-all; max-height: 320px; overflow: auto; margin-top: 12px; }
+  .result a { color: #58d68d; }
+  .count { font-size: 13px; color: #4e5969; } .count b { color: #165dff; }
+  .prog { height: 4px; background: #eef0f3; border-radius: 2px; overflow: hidden; margin-top: 10px; display:none; }
+  .prog > div { height: 100%; width: 30%; background: #165dff; animation: slide 1.2s infinite; }
+  @keyframes slide { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+  .log-line { font-size: 12px; color: #8a909a; padding: 2px 0; }
+  a { color: #165dff; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔧 JLC 3D 预览代理</h1>
+  <div class="sub">登录后无限次数上传预览 · 纯HTTP模式（登录完即关浏览器）· <a href="https://3d-viewer.jlc.com" target="_blank">官网</a></div>
+
+  <div class="card">
+    <div class="label">第 1 步：登录嘉立创账号（登录后浏览器会自动关闭）</div>
+    <div class="row">
+      <span id="st" class="status no"><span class="dot"></span><span id="st-txt">检查中…</span></span>
+      <button id="btnLogin" class="btn-login" onclick="doLogin()">JLC 登录</button>
+      <button id="btnLogout" class="btn-sm" style="background:#fdecec;color:#e5403a" onclick="doLogout()">退出登录</button>
+      <button class="btn-sm" onclick="refreshStatus()">刷新状态</button>
+    </div>
+    <div id="loginLog" style="margin-top:10px"></div>
+    <div id="userInfo" class="user" style="display:none"></div>
+  </div>
+
+  <div class="card">
+    <div class="label">第 2 步：选择模型文件上传（纯HTTP，返回预览链接）</div>
+    <div class="row">
+      <button id="btnUpload" class="btn-upload" disabled>
+        ⬆ 上传文件
+        <input id="fileInput" type="file" accept=".SLDPRT,.SLDASM,.STEP,.STP,.IGS,.IGS,.STL,.OBJ,.3MF,.GLB,.GLTF,.IGS,.X_T,.SAT,.3DM,.JT,.PRT,.IFC,.DWG,.DXF,.ZIP,.RAR" onchange="doUpload(this)">
+      </button>
+      <span class="count">本次已上传 <b id="cnt">0</b> 次</span>
+    </div>
+    <div id="prog" class="prog"><div></div></div>
+    <div id="result" class="result" style="display:none"></div>
+  </div>
+</div>
+
+<script>
+const API = '';
+let count = 0, uploading = false;
+
+function setStatus(cls, txt) {
+  document.getElementById('st').className = 'status ' + cls;
+  document.getElementById('st-txt').textContent = txt;
+}
+
+async function refreshStatus() {
+  setStatus('wait', '检查中…');
+  try {
+    const r = await fetch(API + '/status');
+    const j = await r.json();
+    if (j.loggedIn) {
+      setStatus('ok', '已登录');
+      document.getElementById('btnUpload').disabled = false;
+      const u = j.userInfo || {};
+      document.getElementById('userInfo').style.display = 'block';
+      document.getElementById('userInfo').innerHTML = `👤 ${u.account || '-'} · 客户号 ${u.jlcCustomerCode || '-'} · UID ${u.id || '-'}`;
+    } else {
+      setStatus('no', '未登录');
+      document.getElementById('btnUpload').disabled = true;
+      document.getElementById('userInfo').style.display = 'none';
+    }
+  } catch (e) {
+    setStatus('no', '服务未启动');
+  }
+}
+
+async function doLogout() {
+  if (!confirm('确定退出登录？将清除本地保存的 token 和 cookie。')) return;
+  const btn = document.getElementById('btnLogout');
+  btn.disabled = true;
+  try {
+    await fetch(API + '/logout', { method: 'POST' });
+    document.getElementById('btnUpload').disabled = true;
+    document.getElementById('userInfo').style.display = 'none';
+    setStatus('no', '已退出登录');
+    count = 0;
+    document.getElementById('cnt').textContent = '0';
+  } catch (e) {
+    setStatus('no', '退出失败：' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function doLogin() {
+  const btn = document.getElementById('btnLogin');
+  btn.disabled = true;
+  setStatus('wait', '正在打开浏览器登录…');
+  const logEl = document.getElementById('loginLog');
+  logEl.innerHTML = '';
+  const addLog = (msg) => {
+    const d = document.createElement('div'); d.className = 'log-line'; d.textContent = '• ' + msg;
+    logEl.appendChild(d);
+  };
+  try {
+    // SSE 接收登录进度
+    const es = new EventSource(API + '/login?wait=1');
+    es.onmessage = (ev) => {
+      const d = JSON.parse(ev.data);
+      if (d.msg) addLog(d.msg);
+      if (d.loggedIn !== undefined) {
+        es.close();
+        btn.disabled = false;
+        if (d.loggedIn) {
+          setStatus('ok', '登录成功');
+          addLog('✅ 登录成功，浏览器已关闭');
+          refreshStatus();
+        } else {
+          setStatus('no', '登录未完成');
+          addLog('❌ ' + (d.error || '登录未完成，可重试'));
+        }
+      }
+    };
+    es.onerror = () => { es.close(); btn.disabled = false; setStatus('no', '连接中断'); };
+  } catch (e) {
+    btn.disabled = false;
+    setStatus('no', '请求失败：' + e.message);
+  }
+}
+
+function show(text) {
+  const el = document.getElementById('result');
+  el.style.display = 'block'; el.textContent = text;
+}
+
+async function doUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  if (uploading) { show('⏳ 上一个文件还在处理…'); return; }
+  if (document.getElementById('st').className.includes('no')) { show('❌ 请先登录'); return; }
+  uploading = true;
+  document.getElementById('btnUpload').disabled = true;
+  document.getElementById('prog').style.display = 'block';
+  show(`⬆ 纯HTTP上传中：${file.name} (${(file.size/1024).toFixed(0)} KB)…  通常20-60秒`);
+  const fd = new FormData();
+  fd.append('file', file, file.name);
+  const t0 = Date.now();
+  const timer = setInterval(() => {
+    const s = ((Date.now() - t0) / 1000).toFixed(0);
+    show(`⬆ 上传中：${file.name}… 已用 ${s}s（含转码，约20-60s）`);
+  }, 1000);
+  try {
+    const r = await fetch(API + '/upload', { method: 'POST', body: fd });
+    const j = await r.json();
+    const dt = ((Date.now() - t0) / 1000).toFixed(1);
+    if (j.ok) {
+      count++;
+      document.getElementById('cnt').textContent = count;
+      const el = document.getElementById('result');
+      el.style.display = 'block';
+      const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+      const urlBlock = j.shareUrl
+        ? `预览链接（可分享，24h有效）：<br><a href="${esc(j.shareUrl)}" target="_blank" style="color:#58d68d;word-break:break-all">${esc(j.shareUrl)}</a>`
+        : '<span style="color:#d98a00">⚠ ' + esc(j.warning || '分享链接生成超时') + '</span>';
+      el.innerHTML =
+        `<span style="color:#58d68d">✅ 上传成功 (${dt})</span>\n` +
+        `文件: ${esc(file.name)}\n` +
+        `modelId: ${esc(j.modelId)}\n` + urlBlock;
+      // 自动在新窗口打开预览
+      if (j.shareUrl) window.open(j.shareUrl, '_blank');
+    } else {
+      show('❌ 失败：' + (j.error || JSON.stringify(j, null, 2)));
+    }
+  } catch (e) {
+    show('❌ 请求失败：' + e.message);
+  } finally {
+    clearInterval(timer);
+    uploading = false;
+    document.getElementById('btnUpload').disabled = false;
+    document.getElementById('prog').style.display = 'none';
+  }
+}
+
+refreshStatus();
+setInterval(() => { if (!document.getElementById('st').className.includes('wait')) refreshStatus(); }, 20000);
+</script>
+</body>
+</html>
